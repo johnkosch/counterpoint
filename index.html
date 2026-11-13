@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two-Voice Motion Explorer</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; background: Canvas; color: CanvasText; }
+  main { max-width: 850px; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { font-size: clamp(1.4rem, 4vw, 2rem); margin: 0; }
+  .sub { margin: -8px 0 0; color: GrayText; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: inherit; cursor: pointer; }
+  .mode, #reset { border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: 999px; padding: 9px 16px; background: Canvas; color: CanvasText; }
+  .mode[aria-pressed="true"] { background: Highlight; color: HighlightText; border-color: Highlight; }
+  .panel { border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 14px; padding: 14px; }
+  .panelhead { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom: 8px; }
+  .hint, .muted { color: GrayText; font-size: .88rem; }
+  svg { width:100%; height:auto; display:block; touch-action:none; user-select:none; }
+  .legend { display:flex; justify-content:center; gap:24px; flex-wrap:wrap; font-size:.88rem; margin-top:8px; }
+  .dot { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:7px; vertical-align:-1px; }
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .stat { background:color-mix(in srgb, CanvasText 6%, Canvas); padding:10px; border-radius:9px; }
+  .stat small { display:block; color:GrayText; }
+  .stat strong { font-variant-numeric:tabular-nums; }
+  .bottom { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  #reset { border-radius:9px; }
+  button:focus-visible, circle:focus-visible { outline:3px solid Highlight; outline-offset:3px; }
+  @media (max-width:520px) { body { padding:16px 10px; } .panel { padding:10px; } .hint { max-width:110px; text-align:right; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Two-Voice Motion Explorer</h1>
+  <p class="sub">Explore the four types of melodic motion. Drag either circle.</p>
+  <nav class="tabs" aria-label="Motion type">
+    <button class="mode" data-mode="contrary" aria-pressed="true">Contrary</button>
+    <button class="mode" data-mode="oblique" aria-pressed="false">Oblique</button>
+    <button class="mode" data-mode="parallel" aria-pressed="false">Parallel</button>
+    <button class="mode" data-mode="similar" aria-pressed="false">Similar</button>
+  </nav>
+  <section class="panel">
+    <div class="panelhead"><strong id="mode-title">Contrary Motion</strong><span class="hint">Drag either circle</span></div>
+    <svg id="field" viewBox="0 0 600 340" role="img" aria-label="Interactive field with blue and orange draggable circles">
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="currentColor" opacity=".12"/></pattern>
+      </defs>
+      <rect x="24" y="16" width="552" height="286" rx="10" fill="url(#grid)" stroke="currentColor" opacity=".55"/>
+      <path d="M40 302H560" stroke="currentColor" opacity=".5" stroke-width="1.5"/>
+      <text x="300" y="329" font-size="12" fill="currentColor" opacity=".7" text-anchor="middle">Lateral position →</text>
+      <text x="12" y="160" font-size="11" fill="currentColor" opacity=".7" text-anchor="middle" transform="rotate(-90 12 160)">Vertical position</text>
+      <line id="connector" x1="300" y1="110" x2="300" y2="210" stroke="currentColor" opacity=".55" stroke-dasharray="5 5" stroke-width="2"/>
+      <circle id="blue-halo" r="24" fill="#2998ed" opacity=".15"/>
+      <circle id="orange-halo" r="24" fill="#ed922d" opacity=".15"/>
+      <circle id="blue" cx="300" cy="110" r="16" fill="#2998ed" stroke="#1673bd" stroke-width="2" tabindex="0" role="button" aria-label="Blue circle. Drag to move."/>
+      <circle id="orange" cx="300" cy="210" r="16" fill="#ed922d" stroke="#bd701b" stroke-width="2" tabindex="0" role="button" aria-label="Orange circle. Drag to move."/>
+      <text id="blue-label" x="300" y="81" text-anchor="middle" font-size="13" font-weight="bold" fill="#2998ed">Blue</text>
+      <text id="orange-label" x="300" y="248" text-anchor="middle" font-size="13" font-weight="bold" fill="#ed922d">Orange</text>
+    </svg>
+    <div class="legend"><span><i class="dot" style="background:#2998ed"></i>Blue circle</span><span><i class="dot" style="background:#ed922d"></i>Orange circle</span></div>
+  </section>
+  <section class="panel">
+    <strong>Motion relationship</strong>
+    <div id="status" class="muted" style="margin-top:5px">Opposite directions · Equal distance</div>
+    <p id="description">When one circle moves vertically, the other moves the same distance in the opposite direction.</p>
+    <div class="stats">
+      <div class="stat"><small>Blue vertical position</small><strong id="blue-value">192</strong></div>
+      <div class="stat"><small>Orange vertical position</small><strong id="orange-value">92</strong></div>
+    </div>
+  </section>
+  <div class="bottom"><button id="reset">↺ Reset positions</button><span class="muted">Similar Motion: 75% displacement</span></div>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const svg = $('field');
+  const modes = {
+    contrary: { title:'Contrary Motion', status:'Opposite directions · Equal distance', description:'When one circle moves vertically, the other moves the same distance in the opposite direction.', factor:-1 },
+    oblique: { title:'Oblique Motion', status:'One moves · One stays stationary', description:'Vertical movement of one circle has no effect on the other circle.', factor:0 },
+    parallel: { title:'Parallel Motion', status:'Same direction · Equal distance', description:'Both circles move vertically in the same direction and by the same distance.', factor:1 },
+    similar: { title:'Similar Motion', status:'Same direction · 75% distance', description:'Both circles move in the same direction, but the other circle moves 75% of the distance. For example, a movement of 40 units produces a 30-unit movement in the other circle.', factor:.75 }
+  };
+  let mode='contrary', blue={x:300,y:110}, orange={x:300,y:210}, drag=null;
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  function render() {
+    for (const [name,pos] of [['blue',blue],['orange',orange]]) {
+      $(name).setAttribute('cx',pos.x); $(name).setAttribute('cy',pos.y);
+      $(name+'-halo').setAttribute('cx',pos.x); $(name+'-halo').setAttribute('cy',pos.y);
+      $(name+'-label').setAttribute('x',pos.x);
+      $(name+'-label').setAttribute('y',pos.y+(name==='blue'?-29:38));
+    }
+    $('connector').setAttribute('x1',blue.x); $('connector').setAttribute('y1',blue.y);
+    $('connector').setAttribute('x2',orange.x); $('connector').setAttribute('y2',orange.y);
+    $('blue-value').textContent=Math.round(302-blue.y);
+    $('orange-value').textContent=Math.round(302-orange.y);
+  }
+  function select(m) {
+    mode=m; const d=modes[m];
+    document.querySelectorAll('.mode').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
+    $('mode-title').textContent=d.title; $('status').textContent=d.status; $('description').textContent=d.description;
+  }
+  document.querySelectorAll('.mode').forEach(b=>b.addEventListener('click',()=>select(b.dataset.mode)));
+  function point(e) {
+    const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
+    const q=p.matrixTransform(svg.getScreenCTM().inverse());
+    return {x:clamp(q.x,40,560),y:clamp(q.y,32,285)};
+  }
+  function move(e) {
+    if(!drag)return;
+    const p=point(e), old=drag.which==='blue'?blue:orange, other=drag.which==='blue'?orange:blue;
+    const dx=p.x-drag.start.x, dy=p.y-drag.start.y;
+    old.x=p.x; old.y=p.y;
+    other.x=clamp(drag.otherStart.x+dx,40,560);
+    other.y=clamp(drag.otherStart.y+dy*modes[mode].factor,32,285);
+    render();
+  }
+  function start(e,which) {
+    e.preventDefault();
+    drag={which,start:point(e),otherStart:{...(which==='blue'?orange:blue)}};
+    svg.setPointerCapture(e.pointerId);
+  }
+  ['blue','orange'].forEach(which=>$(which).addEventListener('pointerdown',e=>start(e,which)));
+  svg.addEventListener('pointermove',move);
+  function end(){drag=null;}
+  svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
+  $('reset').addEventListener('click',()=>{blue={x:300,y:110};orange={x:300,y:210};render();});
+  // Keyboard-accessible nudging for the focused circle.
+  ['blue','orange'].forEach(which=>{
+    $(which).addEventListener('keydown',e=>{
+      const step=e.shiftKey?10:3;
+      const delta={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[e.key];
+      if(!delta)return; e.preventDefault();
+      const old=which==='blue'?blue:orange, other=which==='blue'?orange:blue;
+      const dx=delta[0],dy=delta[1],f=modes[mode].factor;
+      old.x=clamp(old.x+dx,40,560); old.y=clamp(old.y+dy,32,285);
+      other.x=clamp(other.x+dx,40,560); other.y=clamp(other.y+dy*f,32,285); render();
+    });
+  });
+  render(); select('contrary');
+})();
+</script>
+</body>
+</html>
